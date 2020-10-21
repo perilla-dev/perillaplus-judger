@@ -102,3 +102,13 @@ dist
 
 # TernJS port file
 .tern-port
+
+# VSCode
+.vscode/
+
+# Typescript dist
+build/
+
+# Data files
+data/**/*
+!data/.gitkeep
