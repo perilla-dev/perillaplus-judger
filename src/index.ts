@@ -5,6 +5,7 @@ import { API } from './api'
 import { DIM_ENTITIES, DI_API, DI_DBCONN } from './constants'
 import { inject, injectMutiple } from './di'
 import { getConfig } from './entities'
+import { wait } from './async'
 
 const DATA_DIR = path.join(__dirname, '..', 'data')
 
@@ -25,4 +26,19 @@ export async function main () {
 
   const me = await api.whoami()
   console.log(chalk.blue('Logged in as:'), chalk.blueBright(me.disp))
+
+  const types = await api.listProblemTypes()
+  console.log('Server problem types:', types.map(x => x.name).join(','))
+  while (true) {
+    for (const type of types) {
+      if (type.name === 'noop') {
+        const solutionId = await api.popSolution(type.id)
+        if (solutionId) {
+          console.log(solutionId)
+        } else {
+          await wait(500)
+        }
+      }
+    }
+  }
 }
