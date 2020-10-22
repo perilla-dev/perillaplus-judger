@@ -1,13 +1,27 @@
 import path from 'path'
 import chalk from 'chalk'
 import { createConnection } from 'typeorm'
-import { API } from './api'
+import { API, SolutionState } from './api'
 import { DIM_ENTITIES, DI_API, DI_DBCONN } from './constants'
 import { inject, injectMutiple } from './di'
 import { getConfig } from './entities'
 import { wait } from './async'
+import { dir as tmpDir } from 'tmp-promise'
+import { emptyDir } from 'fs-extra'
 
 const DATA_DIR = path.join(__dirname, '..', 'data')
+
+interface IJudgerHandlerParams{
+  problemData: any
+  problemDir: string
+  solutionData: any
+  solutionDir: string
+}
+
+async function * noop (params: IJudgerHandlerParams) {
+  console.log(params)
+  yield { status: 'AC', details: '' }
+}
 
 export async function main () {
   const conn = await createConnection({
@@ -34,7 +48,20 @@ export async function main () {
       if (type.name === 'noop') {
         const solutionId = await api.popSolution(type.id)
         if (solutionId) {
-          console.log(solutionId)
+          console.log('Get task:', solutionId)
+          const tmp = await tmpDir()
+          const res = await api.prepareSolution(solutionId, tmp.path)
+          try {
+            await api.updateSolution(res.solution.id, SolutionState.Running, 'Prepared', '{}')
+            for await (const result of noop(res.params)) {
+              await api.updateSolution(res.solution.id, undefined, result.status, result.details)
+            }
+            await api.updateSolution(res.solution.id, SolutionState.Done)
+          } catch (e) {
+            await api.updateSolution(res.solution.id, SolutionState.Done, 'Failed', e.message)
+          }
+          await emptyDir(tmp.path)
+          await tmp.cleanup()
         } else {
           await wait(500)
         }
